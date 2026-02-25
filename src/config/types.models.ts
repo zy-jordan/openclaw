@@ -48,6 +48,7 @@ export type ModelProviderConfig = {
   api?: ModelApi;
   headers?: Record<string, string>;
   authHeader?: boolean;
+  proxy?: string;
   models: ModelDefinitionConfig[];
 };
 

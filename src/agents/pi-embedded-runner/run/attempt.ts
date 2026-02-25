@@ -807,6 +807,19 @@ export async function runEmbeddedAttempt(
         );
       }
 
+      // Apply per-provider proxy if configured (models.providers["provider"].proxy).
+      const providerProxy =
+        params.config?.models?.providers?.[params.model.provider]?.proxy?.trim();
+      if (providerProxy) {
+        const inner = activeSession.agent.streamFn;
+        const { ProxyAgent, setGlobalDispatcher } = await import("undici");
+        const proxyAgent = new ProxyAgent(providerProxy);
+        activeSession.agent.streamFn = (model, context, options) => {
+          setGlobalDispatcher(proxyAgent);
+          return inner(model, context, options);
+        };
+      }
+
       try {
         const prior = await sanitizeSessionHistory({
           messages: activeSession.messages,
