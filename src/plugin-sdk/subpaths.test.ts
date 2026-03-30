@@ -117,6 +117,17 @@ function expectSourceContains(subpath: string, snippet: string) {
   expect(readPluginSdkSource(subpath)).toContain(snippet);
 }
 
+function expectSourceOmitsSnippet(subpath: string, snippet: string) {
+  expect(readPluginSdkSource(subpath)).not.toContain(snippet);
+}
+
+function expectSourceOmitsImportPattern(subpath: string, specifier: string) {
+  const escapedSpecifier = specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const source = readPluginSdkSource(subpath);
+  expect(source).not.toMatch(new RegExp(`\\bfrom\\s+["']${escapedSpecifier}["']`, "u"));
+  expect(source).not.toMatch(new RegExp(`\\bimport\\(\\s*["']${escapedSpecifier}["']\\s*\\)`, "u"));
+}
+
 describe("plugin-sdk subpath exports", () => {
   it("keeps the curated public list free of internal implementation subpaths", () => {
     for (const deniedSubpath of [
@@ -185,15 +196,46 @@ describe("plugin-sdk subpath exports", () => {
       "buildTokenChannelStatusSummary",
       "resolveConfiguredFromCredentialStatuses",
     ]);
-    expectSourceContains("telegram", 'export * from "./telegram-core.js";');
-    expectSourceContains("telegram", 'export * from "./telegram-runtime.js";');
-    expectSourceMentions("imessage", [
-      "normalizeIMessageHandle",
-      "parseChatAllowTargetPrefixes",
-      "parseChatTargetPrefixesOrThrow",
-      "resolveServicePrefixedAllowTarget",
-      "resolveServicePrefixedTarget",
+    expectSourceMentions("bluebubbles", [
+      "normalizeBlueBubblesAcpConversationId",
+      "matchBlueBubblesAcpConversation",
+      "resolveBlueBubblesConversationIdFromTarget",
+      "resolveAckReaction",
+      "resolveChannelMediaMaxBytes",
+      "collectBlueBubblesStatusIssues",
+      "createChannelPairingController",
+      "createChannelReplyPipeline",
+      "resolveRequestUrl",
+      "buildProbeChannelStatusSummary",
+      "extractToolSend",
+      "createFixedWindowRateLimiter",
+      "withResolvedWebhookRequestPipeline",
     ]);
+    expectSourceMentions("irc", [
+      "createChannelReplyPipeline",
+      "chunkTextForOutbound",
+      "createChannelPairingController",
+      "createLoggerBackedRuntime",
+      "ircSetupAdapter",
+      "ircSetupWizard",
+    ]);
+    expectSourceMentions("bluebubbles-policy", [
+      "isAllowedBlueBubblesSender",
+      "resolveBlueBubblesGroupRequireMention",
+      "resolveBlueBubblesGroupToolPolicy",
+    ]);
+    for (const subpath of [
+      "feishu",
+      "googlechat",
+      "matrix",
+      "mattermost",
+      "msteams",
+      "zalo",
+      "zalouser",
+    ]) {
+      expectSourceMentions(subpath, ["chunkTextForOutbound"]);
+    }
+    expectSourceMentions("signal", ["chunkText"]);
     expectSourceMentions("reply-history", [
       "buildPendingHistoryContextFromMap",
       "clearHistoryEntriesIfEnabled",
@@ -404,14 +446,12 @@ describe("plugin-sdk subpath exports", () => {
     expectSourceContract("reply-runtime", {
       omits: [
         "buildMentionRegexes",
-        "createInboundDebouncer",
         "formatInboundEnvelope",
         "formatInboundFromLabel",
         "matchesMentionPatterns",
         "matchesMentionWithExplicit",
         "normalizeMentionText",
         "resolveEnvelopeFormatOptions",
-        "resolveInboundDebounceMs",
         "hasControlCommand",
         "buildCommandTextFromArgs",
         "buildCommandsPaginationKeyboard",
@@ -442,11 +482,18 @@ describe("plugin-sdk subpath exports", () => {
       "applyChannelMatchMeta",
       "buildChannelKeyCandidates",
       "buildMessagingTarget",
+      "createAllowedChatSenderMatcher",
       "ensureTargetId",
+      "parseChatAllowTargetPrefixes",
       "parseMentionPrefixOrAtUserTarget",
+      "parseChatTargetPrefixesOrThrow",
       "requireTargetKind",
       "resolveChannelEntryMatchWithFallback",
       "resolveChannelMatchConfig",
+      "resolveServicePrefixedAllowTarget",
+      "resolveServicePrefixedChatTarget",
+      "resolveServicePrefixedOrChatAllowTarget",
+      "resolveServicePrefixedTarget",
       "resolveTargetsWithOptionalToken",
     ]);
     expectSourceMentions("channel-config-writes", [
@@ -539,10 +586,28 @@ describe("plugin-sdk subpath exports", () => {
       "ssrfPolicyFromAllowPrivateNetwork",
     ]);
 
-    expectSourceMentions("provider-setup", [
-      "buildVllmProvider",
-      "discoverOpenAICompatibleSelfHostedProvider",
-    ]);
+    expectSourceContract("provider-setup", {
+      mentions: [
+        "applyProviderDefaultModel",
+        "discoverOpenAICompatibleLocalModels",
+        "discoverOpenAICompatibleSelfHostedProvider",
+      ],
+      omits: [
+        "buildOllamaProvider",
+        "configureOllamaNonInteractive",
+        "ensureOllamaModelPulled",
+        "promptAndConfigureOllama",
+        "promptAndConfigureVllm",
+        "buildVllmProvider",
+        "buildSglangProvider",
+        "OLLAMA_DEFAULT_BASE_URL",
+        "OLLAMA_DEFAULT_MODEL",
+        "VLLM_DEFAULT_BASE_URL",
+      ],
+    });
+    expectSourceOmitsSnippet("provider-setup", "./ollama-surface.js");
+    expectSourceOmitsImportPattern("provider-setup", "./vllm.js");
+    expectSourceOmitsImportPattern("provider-setup", "./sglang.js");
     expectSourceMentions("provider-auth", [
       "buildOauthProviderAuthResult",
       "generatePkceVerifierChallenge",
@@ -550,15 +615,6 @@ describe("plugin-sdk subpath exports", () => {
       "toFormUrlEncoded",
     ]);
     expectSourceOmits("core", ["buildOauthProviderAuthResult"]);
-    expectSourceContract("provider-models", {
-      mentions: ["applyOpenAIConfig", "buildKilocodeModelDefinition", "discoverHuggingfaceModels"],
-      omits: [
-        "buildMinimaxModelDefinition",
-        "buildMoonshotProvider",
-        "QIANFAN_BASE_URL",
-        "resolveZaiBaseUrl",
-      ],
-    });
     expectSourceContract("provider-model-shared", {
       mentions: ["DEFAULT_CONTEXT_TOKENS", "normalizeModelCompat", "cloneFirstTemplateModel"],
       omits: ["applyOpenAIConfig", "buildKilocodeModelDefinition", "discoverHuggingfaceModels"],
@@ -575,12 +631,29 @@ describe("plugin-sdk subpath exports", () => {
       "createTopLevelChannelDmPolicy",
       "mergeAllowFromEntries",
     ]);
-    expectSourceMentions("lazy-runtime", ["createLazyRuntimeSurface", "createLazyRuntimeModule"]);
-    expectSourceMentions("self-hosted-provider-setup", [
-      "buildVllmProvider",
-      "buildSglangProvider",
-      "configureOpenAICompatibleSelfHostedProviderNonInteractive",
+    expectSourceMentions("setup-tools", [
+      "formatCliCommand",
+      "detectBinary",
+      "installSignalCli",
+      "formatDocsLink",
     ]);
+    expectSourceMentions("lazy-runtime", ["createLazyRuntimeSurface", "createLazyRuntimeModule"]);
+    expectSourceContract("self-hosted-provider-setup", {
+      mentions: [
+        "applyProviderDefaultModel",
+        "discoverOpenAICompatibleLocalModels",
+        "discoverOpenAICompatibleSelfHostedProvider",
+        "configureOpenAICompatibleSelfHostedProviderNonInteractive",
+      ],
+      omits: ["buildVllmProvider", "buildSglangProvider"],
+    });
+    expectSourceOmitsImportPattern("self-hosted-provider-setup", "./vllm.js");
+    expectSourceOmitsImportPattern("self-hosted-provider-setup", "./sglang.js");
+    expectSourceOmitsSnippet("agent-runtime", "./sglang.js");
+    expectSourceOmitsSnippet("agent-runtime", "./vllm.js");
+    expectSourceOmitsSnippet("agent-runtime", "../../extensions/");
+    expectSourceOmitsSnippet("xai-model-id", "./xai.js");
+    expectSourceOmitsSnippet("xai-model-id", "../../extensions/");
     expectSourceMentions("sandbox", ["registerSandboxBackend", "runPluginCommandWithTimeout"]);
 
     expectSourceMentions("secret-input", [
